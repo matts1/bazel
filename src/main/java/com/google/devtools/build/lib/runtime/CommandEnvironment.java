@@ -18,9 +18,14 @@ import static com.google.common.base.Preconditions.checkState;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
+import com.google.common.base.Stopwatch;
+import com.google.devtools.build.lib.util.Pair;
+import com.google.devtools.build.lib.actions.BuildFailedException;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSortedMap;
+import com.google.devtools.build.lib.events.Event;
+import com.google.devtools.build.lib.buildtool.buildevent.BuildStartingEvent;
 import com.google.common.eventbus.EventBus;
 import com.google.common.eventbus.Subscribe;
 import com.google.devtools.build.lib.actions.ActionOutputDirectoryHelper;
@@ -30,7 +35,12 @@ import com.google.devtools.build.lib.analysis.AnalysisOptions;
 import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.analysis.BuildInfoEvent;
 import com.google.devtools.build.lib.analysis.config.CoreOptions;
+import com.google.devtools.build.lib.analysis.config.InvalidConfigurationException;
 import com.google.devtools.build.lib.buildtool.BuildRequestOptions;
+import com.google.devtools.build.lib.buildtool.BuildRequest;
+import com.google.devtools.build.lib.buildtool.ExecutionTool;
+import com.google.devtools.build.lib.analysis.config.BuildOptions;
+import com.google.devtools.build.lib.skyframe.WorkspaceNameValue;
 import com.google.devtools.build.lib.clock.Clock;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.concurrent.QuiescingExecutors;
@@ -76,6 +86,7 @@ import java.util.TreeSet;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
+import java.util.function.Supplier;
 import javax.annotation.Nullable;
 import javax.annotation.concurrent.GuardedBy;
 
@@ -299,6 +310,104 @@ public class CommandEnvironment {
 
     this.commandLinePathFactory =
         CommandLinePathFactory.create(runtime.getFileSystem(), directories);
+  }
+
+  public PhasePreparer getPhasePreparerForCommand(String commandName) {
+    return new PhasePreparer(() -> {
+      BuildRequest request;
+      try (SilentCloseable closeable = Profiler.instance().profile("BuildRequest.create")) {
+        request =
+            BuildRequest.builder()
+                .setCommandName(commandName)
+                .setId(getCommandId())
+                .setOptions(options)
+                .setStartupOptions(runtime.getStartupOptionsProvider())
+                .setOutErr(getReporter().getOutErr())
+                .setTargets(ImmutableList.of())
+                .setStartTimeMillis(getCommandStartTime())
+                .build();
+      }
+
+      for (String issue : request.validateOptions()) {
+        getReporter().handle(Event.warn(issue));
+      }
+
+      BuildOptions buildOptions;
+      try (SilentCloseable c = Profiler.instance().profile("createBuildOptions")) {
+        buildOptions = runtime.createBuildOptions(request);
+      }
+
+      try (SilentCloseable c = Profiler.instance().profile("BuildStartingEvent")) {
+        BuildStartingEvent buildStartingEvent = BuildStartingEvent.create(CommandEnvironment.this, request);
+        getEventBus().post(buildStartingEvent);
+      }
+
+      return new Pair(request, buildOptions);
+    });
+  }
+
+  public PhasePreparer getPhasePreparer(BuildRequest request, BuildOptions options) {
+    return new PhasePreparer(() -> new Pair(request, options));
+  }
+
+  public class PhasePreparer {
+    private Supplier<Pair<BuildRequest, BuildOptions>> supplier;
+    private @Nullable BuildRequest buildRequest;
+    private @Nullable BuildOptions buildOptions;
+    private @Nullable ExecutionTool executionTool;
+
+    private PhasePreparer(Supplier<Pair<BuildRequest, BuildOptions>> supplier) {
+      this.supplier = supplier;
+    }
+
+    private void ensureCached() {
+      if (buildRequest == null) {
+        Pair<BuildRequest, BuildOptions> pair = supplier.get();
+        this.buildRequest = pair.first;
+        this.buildOptions = pair.second;
+      }
+    }
+
+    private BuildOptions getBuildOptions() {
+      ensureCached();
+      return buildOptions;
+    }
+
+    private BuildRequest getBuildRequest() {
+      ensureCached();
+      return buildRequest;
+    }
+
+    public void ensureAnalysisReady() {
+      getSkyframeExecutor().setBaselineConfiguration(buildOptions);
+    }
+
+    public ExecutionTool getExecutionTool() throws InterruptedException, AbruptExitException {
+      if (executionTool == null) {
+        BuildRequest request = getBuildRequest();
+        // The workspace name is required to create the execroot, which is needed for the execution tool.
+        String workspaceName = ((WorkspaceNameValue)getSkyframeExecutor()
+            .getWorkspaceNameValue(
+                /* extendedEventHandler= */ getReporter(),
+                /* threadCount= */ request.getLoadingPhaseThreadCount(),
+                /* keepGoing= */ request.getKeepGoing()
+            )).getName();
+        CommandEnvironment.this.setWorkspaceName(workspaceName);
+        executionTool = new ExecutionTool(CommandEnvironment.this, buildRequest);
+      }
+      return executionTool;
+    }
+
+    public ExecutionTool ensureExecutionReady() throws InterruptedException, AbruptExitException, BuildFailedException, InvalidConfigurationException {
+      ExecutionTool executionTool = getExecutionTool();
+
+      ensureAnalysisReady();
+
+      // This timer measures time from the first execution activity to the last.
+      Stopwatch executionTimer = Stopwatch.createUnstarted();
+      executionTool.prepareForExecution(executionTimer);
+      return executionTool;
+    }
   }
 
   private Path computeWorkingDirectory(CommonCommandOptions commandOptions)

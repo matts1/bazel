@@ -784,6 +784,9 @@ public class SingleExtensionEvalFunction implements SkyFunction {
         StarlarkThread thread = new StarlarkThread(mu, starlarkSemantics);
         thread.setPrintHandler(Event.makeDebugPrintHandler(env.getListener()));
         moduleContext = createContext(env, usagesValue, starlarkSemantics, extensionId);
+        if (moduleContext == null) {
+          return null;
+        }
         threadContext.storeInThread(thread);
         try (SilentCloseable c =
             Profiler.instance()
@@ -845,30 +848,39 @@ public class SingleExtensionEvalFunction implements SkyFunction {
           moduleExtensionMetadata);
     }
 
-    private ModuleExtensionContext createContext(
+    private @Nullable ModuleExtensionContext createContext(
         Environment env,
         SingleExtensionUsagesValue usagesValue,
         StarlarkSemantics starlarkSemantics,
         ModuleExtensionId extensionId)
-        throws SingleExtensionEvalFunctionException {
+        throws SingleExtensionEvalFunctionException, InterruptedException {
       Path workingDirectory =
           directories
               .getOutputBase()
               .getRelative(LabelConstants.MODULE_EXTENSION_WORKING_DIRECTORY_LOCATION)
               .getRelative(usagesValue.getExtensionUniqueName());
       ArrayList<StarlarkBazelModule> modules = new ArrayList<>();
+      boolean missingDeps = false;
       for (AbridgedModule abridgedModule : usagesValue.getAbridgedModules()) {
         ModuleKey moduleKey = abridgedModule.getKey();
         try {
-          modules.add(
-              StarlarkBazelModule.create(
-                  abridgedModule,
-                  extension,
-                  usagesValue.getRepoMappings().get(moduleKey),
-                  usagesValue.getExtensionUsages().get(moduleKey)));
+          StarlarkBazelModule starlarkBazelModule = StarlarkBazelModule.create(
+              env,
+              abridgedModule,
+              extension,
+              usagesValue.getRepoMappings().get(moduleKey),
+              usagesValue.getExtensionUsages().get(moduleKey));
+          if (starlarkBazelModule == null) {
+            missingDeps = true;
+          } else {
+            modules.add(starlarkBazelModule);
+          }
         } catch (ExternalDepsException e) {
           throw new SingleExtensionEvalFunctionException(e, Transience.PERSISTENT);
         }
+      }
+      if (missingDeps) {
+        return null;
       }
       ModuleExtensionUsage rootUsage = usagesValue.getExtensionUsages().get(ModuleKey.ROOT);
       boolean rootModuleHasNonDevDependency =

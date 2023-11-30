@@ -69,9 +69,7 @@ public class DynamicExecutionModule extends BlazeModule {
 
   @Override
   public Iterable<Class<? extends OptionsBase>> getCommandOptions(Command command) {
-    return "build".equals(command.name())
-        ? ImmutableList.of(DynamicExecutionOptions.class)
-        : ImmutableList.<Class<? extends OptionsBase>>of();
+    return ImmutableList.of(DynamicExecutionOptions.class);
   }
 
   @Override

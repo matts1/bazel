@@ -32,8 +32,12 @@ import com.google.devtools.build.lib.query2.query.output.QueryOptions;
 import com.google.devtools.build.lib.query2.query.output.QueryOutputUtils;
 import com.google.devtools.build.lib.query2.query.output.StreamedFormatter;
 import com.google.devtools.build.lib.runtime.BlazeCommandResult;
+import com.google.devtools.build.lib.buildeventstream.BuildEventProtocolOptions;
+import com.google.devtools.build.lib.pkgcache.LoadingOptions;
+import com.google.devtools.build.lib.buildtool.BuildRequestOptions;
 import com.google.devtools.build.lib.runtime.Command;
 import com.google.devtools.build.lib.runtime.CommandEnvironment;
+import com.google.devtools.build.lib.exec.ExecutionOptions;
 import com.google.devtools.build.lib.runtime.KeepGoingOption;
 import com.google.devtools.build.lib.runtime.LoadingPhaseThreadsOption;
 import com.google.devtools.build.lib.runtime.QueryRuntimeHelper;
@@ -42,6 +46,8 @@ import com.google.devtools.build.lib.server.FailureDetails.FailureDetail;
 import com.google.devtools.build.lib.server.FailureDetails.Query;
 import com.google.devtools.build.lib.server.FailureDetails.Query.Code;
 import com.google.devtools.build.lib.util.DetailedExitCode;
+import com.google.devtools.build.lib.exec.local.LocalExecutionOptions;
+import com.google.devtools.build.lib.analysis.AnalysisOptions;
 import com.google.devtools.build.lib.util.Either;
 import com.google.devtools.build.lib.util.ExitCode;
 import com.google.devtools.build.lib.util.InterruptedFailureDetails;
@@ -58,8 +64,16 @@ import java.util.Set;
       PackageOptions.class,
       QueryOptions.class,
       KeepGoingOption.class,
-      LoadingPhaseThreadsOption.class
+      LoadingPhaseThreadsOption.class,
+      // The following are required for execution during the loading phase.
+      BuildRequestOptions.class,
+      ExecutionOptions.class,
+      LocalExecutionOptions.class,
+      AnalysisOptions.class,
+      LoadingOptions.class,
+      BuildEventProtocolOptions.class,
     },
+    usesConfigurationOptions = true,
     help = "resource:query.txt",
     shortDescription = "Executes a dependency graph query.",
     allowResidue = true,

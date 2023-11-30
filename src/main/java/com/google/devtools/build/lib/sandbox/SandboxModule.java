@@ -101,9 +101,7 @@ public final class SandboxModule extends BlazeModule {
 
   @Override
   public Iterable<Class<? extends OptionsBase>> getCommandOptions(Command command) {
-    return "build".equals(command.name())
-        ? ImmutableList.of(SandboxOptions.class)
-        : ImmutableList.of();
+    return ImmutableList.of(SandboxOptions.class);
   }
 
   /** Computes the path to the sandbox base tree for the given running command. */

@@ -115,9 +115,7 @@ public class IncludeScanningModule extends BlazeModule {
 
   @Override
   public Iterable<Class<? extends OptionsBase>> getCommandOptions(Command command) {
-    return "build".equals(command.name())
-        ? ImmutableList.of(IncludeScanningOptions.class)
-        : ImmutableList.of();
+        return ImmutableList.of(IncludeScanningOptions.class);
   }
 
   @Override

@@ -1,0 +1,5 @@
+load(":generated_repo.bzl", "generate_repo")
+
+generate_repo(
+    name = "generated_repo",
+)

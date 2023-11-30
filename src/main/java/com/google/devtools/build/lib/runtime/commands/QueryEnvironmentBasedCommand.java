@@ -16,12 +16,16 @@ package com.google.devtools.build.lib.runtime.commands;
 import static com.google.devtools.build.lib.packages.Rule.ALL_LABELS;
 
 import com.google.common.collect.ImmutableList;
+import com.google.devtools.build.lib.actions.BuildFailedException;
 import com.google.devtools.build.lib.analysis.NoBuildEvent;
 import com.google.devtools.build.lib.analysis.NoBuildRequestFinishedEvent;
 import com.google.devtools.build.lib.cmdline.RepositoryMapping;
 import com.google.devtools.build.lib.cmdline.RepositoryName;
+import com.google.devtools.build.lib.analysis.config.InvalidConfigurationException;
 import com.google.devtools.build.lib.cmdline.TargetPattern;
 import com.google.devtools.build.lib.cmdline.TargetPattern.Parser;
+import com.google.devtools.build.lib.buildtool.ExecutionTool;
+import java.util.function.Supplier;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.packages.LabelPrinter;
 import com.google.devtools.build.lib.packages.Target;
@@ -65,6 +69,7 @@ import com.google.devtools.common.options.TriState;
 import java.util.Set;
 import java.util.function.Function;
 import net.starlark.java.eval.StarlarkSemantics;
+import com.google.devtools.build.lib.runtime.Command;
 
 /**
  * Common methods and utils to set up Blaze Runtime environments for {@link BlazeCommand} which
@@ -106,15 +111,27 @@ public abstract class QueryEnvironmentBasedCommand implements BlazeCommand {
     LoadingPhaseThreadsOption threadsOption = options.getOptions(LoadingPhaseThreadsOption.class);
     boolean keepGoing = options.getOptions(KeepGoingOption.class).keepGoing;
 
+    CommandEnvironment.PhasePreparer executionTool = env.getPhasePreparerForCommand(getClass().getAnnotation(Command.class).name());
+
+
     TargetPattern.Parser mainRepoTargetParser;
     try {
       env.syncPackageLoading(options);
+      // TODO: If we can pass the supplier to the consumers of this, we can skip doing all of the
+      // execution related stuff in a query command unless we query an external repo.
+      executionTool.ensureExecutionReady();
       RepositoryMapping repoMapping =
           env.getSkyframeExecutor()
               .getMainRepoMapping(keepGoing, threadsOption.threads, env.getReporter());
       mainRepoTargetParser =
           new Parser(env.getRelativeWorkingDirectory(), RepositoryName.MAIN, repoMapping);
     } catch (RepositoryMappingResolutionException e) {
+      env.getReporter().handle(Event.error(e.getMessage()));
+      return BlazeCommandResult.detailedExitCode(e.getDetailedExitCode());
+    } catch (BuildFailedException e) {
+      env.getReporter().handle(Event.error(e.getMessage()));
+      return BlazeCommandResult.detailedExitCode(e.getDetailedExitCode());
+    } catch (InvalidConfigurationException e) {
       env.getReporter().handle(Event.error(e.getMessage()));
       return BlazeCommandResult.detailedExitCode(e.getDetailedExitCode());
     } catch (InterruptedException e) {

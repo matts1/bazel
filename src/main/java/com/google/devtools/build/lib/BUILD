@@ -423,6 +423,7 @@ java_library(
         "//src/main/java/com/google/devtools/build/lib/skyframe:top_level_aspects_value",
         "//src/main/java/com/google/devtools/build/lib/skyframe:top_level_status_events",
         "//src/main/java/com/google/devtools/build/lib/skyframe:workspace_info",
+        "//src/main/java/com/google/devtools/build/lib/skyframe:workspace_name_value",
         "//src/main/java/com/google/devtools/build/lib/skyframe/actiongraph/v2:actiongraph_v2",
         "//src/main/java/com/google/devtools/build/lib/skyframe/config",
         "//src/main/java/com/google/devtools/build/lib/skyframe/rewinding:action_rewound_event",

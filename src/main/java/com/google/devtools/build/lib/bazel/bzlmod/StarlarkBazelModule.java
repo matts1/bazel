@@ -18,6 +18,7 @@ import com.google.common.collect.ImmutableCollection;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Maps;
+import com.google.devtools.build.skyframe.SkyFunction;
 import com.google.devtools.build.docgen.annot.DocCategory;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.cmdline.RepositoryMapping;
@@ -103,12 +104,13 @@ public class StarlarkBazelModule implements StarlarkValue {
    * present in the given {@link ModuleExtensionUsage}. Any labels present in tags will be converted
    * using the given {@link RepositoryMapping}.
    */
-  public static StarlarkBazelModule create(
+  public static @Nullable StarlarkBazelModule create(
+      SkyFunction.Environment env,
       AbridgedModule module,
       ModuleExtension extension,
       RepositoryMapping repoMapping,
       @Nullable ModuleExtensionUsage usage)
-      throws ExternalDepsException {
+      throws ExternalDepsException, InterruptedException {
     LabelConverter labelConverter =
         new LabelConverter(
             PackageIdentifier.create(module.getCanonicalRepoName(), PathFragment.EMPTY_FRAGMENT),
@@ -118,6 +120,7 @@ public class StarlarkBazelModule implements StarlarkValue {
     for (String tagClassName : extension.getTagClasses().keySet()) {
       typeCheckedTags.put(tagClassName, new ArrayList<>());
     }
+    boolean missingDeps = false;
     for (Tag tag : tags) {
       TagClass tagClass = extension.getTagClasses().get(tag.getTagName());
       if (tagClass == null) {
@@ -133,11 +136,20 @@ public class StarlarkBazelModule implements StarlarkValue {
 
       // Now we need to type-check the attribute values and convert them into "build language types"
       // (for example, String to Label).
-      typeCheckedTags
-          .get(tag.getTagName())
-          .add(TypeCheckedTag.create(tagClass, tag, labelConverter));
+      TypeCheckedTag typeCheckedTag = TypeCheckedTag.create(env, tagClass, tag, labelConverter);
+      if (typeCheckedTag == null) {
+        missingDeps = true;
+      } else {
+        typeCheckedTags
+            .get(tag.getTagName())
+            .add(typeCheckedTag);
+      }
     }
-    return new StarlarkBazelModule(
+
+    // PrerequisitesCollection prerequisites = new PrerequisitesCollection(
+    //
+    // );
+    return missingDeps ? null : new StarlarkBazelModule(
         module.getName(),
         module.getVersion().getOriginal(),
         new Tags(Maps.transformValues(typeCheckedTags, StarlarkList::immutableCopyOf)),

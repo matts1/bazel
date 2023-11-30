@@ -1,0 +1,13 @@
+module(
+    name = "my_module",
+    version = "0.1",
+)
+
+gen_repo = use_extension("//:extension.bzl", "gen_repo")
+
+gen_repo.gen_repo(generator = "//:generated_repo")
+
+use_repo(
+    gen_repo,
+    "generated_repo",
+)

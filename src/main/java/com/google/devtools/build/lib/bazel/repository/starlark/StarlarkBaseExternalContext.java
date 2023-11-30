@@ -25,6 +25,7 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSortedMap;
 import com.google.common.collect.Maps;
 import com.google.devtools.build.lib.actions.FileValue;
+import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.bazel.debug.WorkspaceRuleEvent;
 import com.google.devtools.build.lib.bazel.repository.DecompressorDescriptor;
 import com.google.devtools.build.lib.bazel.repository.DecompressorValue;
@@ -888,12 +889,23 @@ public abstract class StarlarkBaseExternalContext implements StarlarkValue {
               allowedTypes = {
                   @ParamType(type = String.class),
                   @ParamType(type = Label.class),
-                  @ParamType(type = StarlarkPath.class)
+                  @ParamType(type = StarlarkPath.class),
+                  @ParamType(type = Artifact.class)
               },
               doc = "path of the file to read from."),
       })
   public String readFile(Object path, StarlarkThread thread)
       throws RepositoryFunctionException, EvalException, InterruptedException {
+    if (path instanceof Artifact) {
+      // ActionExecutionValue value = (ActionExecutionValue) env.getValue(Artifact.key((Artifact) path));
+      // if (value == null) {
+      //   TODO: allow restarting.
+        // return null;
+      // }
+      // TODO: Only execute the action here. At the moment, this is eagerly done in the tag class.
+      // TODO: support BWotB.
+      path = ((Artifact) path).getPath().toString();
+    }
     StarlarkPath p = getPath("read()", path);
     WorkspaceRuleEvent w =
         WorkspaceRuleEvent.newReadEvent(

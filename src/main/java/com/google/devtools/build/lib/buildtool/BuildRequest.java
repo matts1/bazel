@@ -358,7 +358,7 @@ public class BuildRequest implements OptionsProvider {
   }
 
   /** Returns the value of the --loading_phase_threads option. */
-  int getLoadingPhaseThreadCount() {
+  public int getLoadingPhaseThreadCount() {
     return getOptions(LoadingPhaseThreadsOption.class).threads;
   }
   /**

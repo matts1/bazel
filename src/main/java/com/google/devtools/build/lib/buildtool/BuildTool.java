@@ -40,6 +40,7 @@ import com.google.devtools.build.lib.buildtool.buildevent.NoExecutionEvent;
 import com.google.devtools.build.lib.buildtool.buildevent.StartingAqueryDumpAfterBuildEvent;
 import com.google.devtools.build.lib.cmdline.TargetParsingException;
 import com.google.devtools.build.lib.events.Event;
+import com.google.devtools.build.lib.events.ExtendedEventHandler;
 import com.google.devtools.build.lib.events.OutputFilter;
 import com.google.devtools.build.lib.events.Reporter;
 import com.google.devtools.build.lib.exec.ExecutionOptions;
@@ -53,9 +54,12 @@ import com.google.devtools.build.lib.runtime.CommandEnvironment;
 import com.google.devtools.build.lib.server.FailureDetails.ActionQuery;
 import com.google.devtools.build.lib.server.FailureDetails.FailureDetail;
 import com.google.devtools.build.lib.skyframe.BuildResultListener;
+import com.google.devtools.build.lib.skyframe.BuildResultListener;
+import com.google.devtools.build.lib.skyframe.WorkspaceNameValue;
 import com.google.devtools.build.lib.skyframe.RepositoryMappingValue.RepositoryMappingResolutionException;
 import com.google.devtools.build.lib.skyframe.SequencedSkyframeExecutor;
 import com.google.devtools.build.lib.skyframe.SkyframeBuildView.BuildDriverKeyTestContext;
+import com.google.devtools.build.lib.skyframe.WorkspaceNameValue;
 import com.google.devtools.build.lib.skyframe.TargetPatternPhaseValue;
 import com.google.devtools.build.lib.skyframe.actiongraph.v2.ActionGraphDump;
 import com.google.devtools.build.lib.skyframe.actiongraph.v2.AqueryOutputHandler;
@@ -279,21 +283,24 @@ public class BuildTool {
       throws InterruptedException, TargetParsingException, LoadingFailedException,
           AbruptExitException, ViewCreationFailedException, BuildFailedException, TestExecException,
           InvalidConfigurationException, RepositoryMappingResolutionException {
+    Profiler.instance().markPhase(ProfilePhase.TARGET_PATTERN_EVAL);
+
+    CommandEnvironment.PhasePreparer phasePreparer = env.getPhasePreparer(request, buildOptions);
+    // TODO: remove this, refactor elsewhere.
+    phasePreparer.ensureExecutionReady();
+
     // Target pattern evaluation.
     TargetPatternPhaseValue loadingResult;
-    Profiler.instance().markPhase(ProfilePhase.TARGET_PATTERN_EVAL);
     try (SilentCloseable c = Profiler.instance().profile("evaluateTargetPatterns")) {
       loadingResult =
           AnalysisAndExecutionPhaseRunner.evaluateTargetPatterns(env, request, validator);
     }
-    env.setWorkspaceName(loadingResult.getWorkspaceName());
 
     // See https://github.com/bazelbuild/rules_nodejs/issues/3693.
     env.getSkyframeExecutor().clearSyscallCache();
 
     boolean hasCatastrophe = false;
-
-    ExecutionTool executionTool = new ExecutionTool(env, request);
+    ExecutionTool executionTool = phasePreparer.getExecutionTool();
     // This timer measures time from the first execution activity to the last.
     Stopwatch executionTimer = Stopwatch.createUnstarted();
 

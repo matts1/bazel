@@ -17,8 +17,20 @@ package com.google.devtools.build.lib.bazel.bzlmod;
 import com.google.common.collect.ImmutableCollection;
 import com.google.devtools.build.lib.packages.Attribute;
 import com.google.devtools.build.lib.packages.LabelConverter;
+import com.google.devtools.build.lib.actions.ActionAnalysisMetadata;
+import com.google.devtools.build.lib.actions.Artifact;
+import com.google.devtools.build.lib.cmdline.Label;
+import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
 import com.google.devtools.build.lib.packages.Type.ConversionException;
 import com.google.devtools.build.lib.server.FailureDetails.ExternalDeps.Code;
+import com.google.devtools.build.lib.analysis.config.transitions.BaselineOptionsValue;
+import com.google.devtools.build.lib.analysis.ConfiguredTargetValue;
+import com.google.devtools.build.lib.skyframe.ConfiguredTargetKey;
+import com.google.devtools.build.lib.skyframe.RuleConfiguredTargetValue;
+import com.google.devtools.build.lib.skyframe.config.BuildConfigurationKey;
+import com.google.devtools.build.skyframe.SkyFunction;
+import com.google.devtools.build.skyframe.SkyKey;
+import com.google.devtools.build.skyframe.SkyValue;
 import java.util.Map;
 import javax.annotation.Nullable;
 import net.starlark.java.annot.StarlarkBuiltin;
@@ -57,8 +69,8 @@ public class TypeCheckedTag implements Structure {
   }
 
   /** Creates a {@link TypeCheckedTag}. */
-  public static TypeCheckedTag create(TagClass tagClass, Tag tag, LabelConverter labelConverter)
-      throws ExternalDepsException {
+  public static @Nullable TypeCheckedTag create(SkyFunction.Environment env, TagClass tagClass, Tag tag, LabelConverter labelConverter)
+      throws ExternalDepsException, InterruptedException {
     Object[] attrValues = new Object[tagClass.getAttributes().size()];
     for (Map.Entry<String, Object> attrValue : tag.getAttributeValues().attributes().entrySet()) {
       Integer attrIndex = tagClass.getAttributeIndices().get(attrValue.getKey());
@@ -92,6 +104,44 @@ public class TypeCheckedTag implements Structure {
             tag.getLocation(),
             attr.getPublicName(),
             attr.getAllowedValues().getErrorReason(nativeValue));
+      }
+
+      if (nativeValue instanceof Label) {
+        Label platform = null;
+        try {
+          // TODO: support RBE
+          platform = Label.parseCanonical("@@local_config_platform//:host");
+        } catch (LabelSyntaxException e) {
+          System.out.println("INVALID LABEL");
+          System.exit(1);
+        }
+        BaselineOptionsValue options = (BaselineOptionsValue) env.getValue(BaselineOptionsValue.key(/* afterExecTransition= */ true, /* newPlatform=*/ platform));
+        if (options == null) {
+          return null;
+        }
+
+        ConfiguredTargetKey key = ConfiguredTargetKey.builder()
+            .setLabel((Label)nativeValue)
+            .setConfigurationKey(BuildConfigurationKey.create(options.toOptions()))
+            .build();
+        ConfiguredTargetValue configuredTarget = (ConfiguredTargetValue) env.getValue(key);
+        if (configuredTarget == null) {
+          return null;
+        }
+        if (configuredTarget instanceof RuleConfiguredTargetValue) {
+          nativeValue = ((RuleConfiguredTargetValue)configuredTarget).getConfiguredTarget().getProvidersDictForQuery();
+          // TODO: This is currently required to ensure that module_ctx.read succeeds. However, we should be more lazy about this and just do it in module_ctx.read. The problem is that read isn't compatible with restarts at the moment.
+          for (ActionAnalysisMetadata action : ((RuleConfiguredTargetValue)configuredTarget).getActions()) {
+            for (Artifact output : action.getOutputs()) {
+              SkyKey key2 = Artifact.key(output);
+              SkyValue result = env.getValue(key2);
+              if (result == null) {
+                return null;
+              }
+            }
+          }
+        }
+        // attr.isSatisfiedBy(configuredTarget.)
       }
 
       attrValues[attrIndex] = Attribute.valueToStarlark(nativeValue);

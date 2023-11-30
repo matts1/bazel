@@ -21,6 +21,7 @@ import com.google.devtools.build.lib.bazel.repository.starlark.StarlarkBaseExter
 import com.google.devtools.build.lib.runtime.ProcessWrapper;
 import com.google.devtools.build.lib.runtime.RepositoryRemoteExecutor;
 import com.google.devtools.build.lib.vfs.Path;
+import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.skyframe.SkyFunction.Environment;
 import java.util.Map;
 import javax.annotation.Nullable;
@@ -144,6 +145,18 @@ public class ModuleExtensionContext extends StarlarkBaseExternalContext {
       structField = true)
   public boolean rootModuleHasNonDevDependency() {
     return rootModuleHasNonDevDependency;
+  }
+
+  @StarlarkMethod(
+      name = "get_providers",
+      doc = "Whether the root module uses this extension as a non-dev dependency.",
+      parameters = {
+          @Param(name = "label", allowedTypes = {
+              @ParamType(type = Label.class)
+          })})
+  public boolean getProviders(Label label) {
+    System.out.println("GOT LABEL " + label.toString());
+    return true;
   }
 
   @StarlarkMethod(

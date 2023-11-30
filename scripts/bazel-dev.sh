@@ -32,7 +32,7 @@ function usage() {
 BAZEL_REPO=${BAZEL_REPO:-https://github.com/bazelbuild/bazel}
 # Where to keep the Bazel repository. If you make changes here, be warned that
 # this script may overwrite or lose them.
-BAZEL_DIR=${BAZEL_DIR:-$HOME/os-bazel}
+BAZEL_DIR=${BAZEL_DIR:-$HOME/bazel}
 # Bazel to use to build local bazel binaries.
 BAZEL_BINARY=${BAZEL_BINARY:-$(which bazel)}
 

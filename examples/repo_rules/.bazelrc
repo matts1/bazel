@@ -1,0 +1,7 @@
+# Enable bazel module system.
+common --enable_bzlmod --lockfile_mode=off
+
+# Disable the system toolchain.
+# build --action_env=BAZEL_DO_NOT_DETECT_CPP_TOOLCHAIN=1
+
+common --experimental_merged_skyframe_analysis_execution

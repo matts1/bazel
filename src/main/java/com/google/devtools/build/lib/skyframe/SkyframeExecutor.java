@@ -2650,11 +2650,22 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
       SkyKey key)
       throws InterruptedException, TargetParsingException {
     Stopwatch timer = Stopwatch.createStarted();
-    eventHandler.post(new LoadingPhaseStartedEvent(packageProgress));
     EvaluationResult<TargetPatternPhaseValue> evalResult =
         evaluate(ImmutableList.of(key), keepGoing, threadCount, eventHandler);
     tryThrowTargetParsingException(eventHandler, targetPatterns, key, evalResult);
     eventHandler.post(new TargetParsingPhaseTimeEvent(timer.stop().elapsed().toMillis()));
+    return evalResult.get(key);
+  }
+
+  public WorkspaceNameValue getWorkspaceNameValue(
+      ExtendedEventHandler eventHandler,
+      int threadCount,
+      boolean keepGoing)
+      throws InterruptedException {
+    eventHandler.post(new LoadingPhaseStartedEvent(packageProgress));
+    SkyKey key = WorkspaceNameValue.KEY;
+    EvaluationResult<WorkspaceNameValue> evalResult =
+        evaluate(ImmutableList.of(key), keepGoing, threadCount, eventHandler);
     return evalResult.get(key);
   }
 

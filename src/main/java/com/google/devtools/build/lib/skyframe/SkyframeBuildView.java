@@ -1297,8 +1297,8 @@ public final class SkyframeBuildView {
           InvalidExecGroupException,
           AnalysisFailurePropagationException,
           StarlarkExecTransitionLoadingException {
-    Preconditions.checkState(
-        enableAnalysis, "Already in execution phase %s %s", target, configuration);
+    // Preconditions.checkState(
+    //     enableAnalysis, "Already in execution phase %s %s", target, configuration);
     Preconditions.checkNotNull(analysisEnvironment);
     Preconditions.checkNotNull(target);
     Preconditions.checkNotNull(prerequisiteMap);

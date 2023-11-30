@@ -143,8 +143,9 @@ public class ExecutionTool {
   private final ModuleActionContextRegistry actionContextRegistry;
 
   private boolean informedOutputServiceToStartTheBuild = false;
+  private boolean preparedForExecution = false;
 
-  ExecutionTool(CommandEnvironment env, BuildRequest request)
+  public ExecutionTool(CommandEnvironment env, BuildRequest request)
       throws AbruptExitException, InterruptedException {
     this.env = env;
     this.runtime = env.getRuntime();
@@ -250,13 +251,19 @@ public class ExecutionTool {
    * <p>This method concentrates the setup steps for execution, which were previously scattered over
    * several classes. We need this in order to merge analysis & execution phases.
    *
+   * If you call this function multiple times, later invocations will be a no-op.
+   *
    * <p>TODO(b/213040766): Write tests for these setup steps.
+   *
    */
   public void prepareForExecution(Stopwatch executionTimer)
       throws AbruptExitException,
           BuildFailedException,
           InterruptedException,
           InvalidConfigurationException {
+    if (preparedForExecution) {
+      return;
+    }
     init();
     BuildRequestOptions buildRequestOptions = request.getBuildOptions();
 
@@ -356,6 +363,7 @@ public class ExecutionTool {
     }
 
     announceEnteringDirIfEmacs();
+    preparedForExecution = true;
   }
 
   /**
